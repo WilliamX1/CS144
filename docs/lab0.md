@@ -1,4 +1,4 @@
-# lab Checkpoint 0: networking warmup
+# Lab Checkpoint 0: networking warmup
 
 ## Content
 

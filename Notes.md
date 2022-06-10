@@ -1,6 +1,6 @@
 # CS144 Introduction to Computer Networking
 
-`next`: https://www.youtube.com/watch?v=qNSIIRxEhZI&list=PL6RdenZrxrw9inR-IJv-erlOKRHjymxMN&index=8
+`next`: https://www.youtube.com/watch?v=qNSIIRxEhZI&list=PL6RdenZrxrw9inR-IJv-erlOKRHjymxMN&index=20
 
 
 分层结构，网络传输时从上至下依次调用，主机之间仅同层交流，同一主机内仅上下层交流。
