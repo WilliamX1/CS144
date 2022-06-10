@@ -4,7 +4,9 @@
 #include "byte_stream.hh"
 
 #include <cstdint>
+#include <iostream>
 #include <string>
+#include <vector>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
@@ -12,8 +14,25 @@ class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
 
-    ByteStream _output;  //!< The reassembled in-order byte stream
-    size_t _capacity;    //!< The maximum number of bytes
+    ByteStream _output;     //!< The reassembled in-order byte stream
+    size_t _capacity{};     //!< The maximum number of bytes
+    uint64_t _nextbyte{};   // the index of next byte to write into ByteStream
+    bool _eof{};            // whether the end of file
+    uint64_t _end_index{};  // the end index
+
+    struct substring {
+        // index_begin <= data index in the stream < index_end
+        std::string data{};
+        uint64_t index{};
+        bool eof{};
+        substring(){};
+        substring(const std::string &d, uint64_t i, bool e) : data{d}, index{i}, eof{e} {};
+    };
+    std::vector<substring> _substrings{};
+
+    void discard_substrings();  // discard substring exceed the memory limit
+    void merge_substrings();    // merge substring if they are overlapped
+    void write_substrings();    // write substring into _output as much as we can
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
