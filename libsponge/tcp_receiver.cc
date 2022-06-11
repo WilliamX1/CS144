@@ -13,26 +13,26 @@ using namespace std;
 void TCPReceiver::segment_received(const TCPSegment &seg) {
     // set the initial sequence number if necessary
     if (seg.header().syn) {
-        _init_seqno.emplace(seg.header().seqno);
+        // just accept the first syn
+        if (_syn_received) return;
+
         _syn_received = true;
-        _fin_received = false;
-    };
-    if (seg.header().fin) {
-        _fin_received = true;
-        _next_ackno.reset();
+        // init `_init_seqno` and `_next_ackno`
+        _init_seqno.emplace(seg.header().seqno);
+        _next_ackno.emplace(_init_seqno.value() + 1);
     };
 
     if (_syn_received) {
+        // push substring into StreamReassembler
         const std::string data = seg.payload().copy();
-        const uint64_t index = unwrap(seg.header().seqno, _init_seqno.value(), 0);
+        const uint64_t stream_index = unwrap(seg.header().seqno + seg.header().syn, _init_seqno.value(), _reassembler.get_abs_seqno()) - 1;
         const bool eof = seg.header().fin;
-
-        _reassembler.push_substring(data, index, eof);
-
-        if (_next_ackno.has_value())
-            _next_ackno.emplace(_next_ackno.value() + seg.payload().size() + seg.header().syn + seg.header().fin);
-        else
-            _next_ackno.emplace(_init_seqno.value() + seg.payload().size() + seg.header().syn + seg.header().fin);
+        _reassembler.push_substring(data, stream_index, eof);
+        // evaluate next ackno
+        _next_ackno.emplace(wrap(_reassembler.get_abs_seqno(), _init_seqno.value()) + 1);
+        
+        if (_reassembler.empty())
+            _next_ackno.emplace(_next_ackno.value() + 1);
     };
 }
 
