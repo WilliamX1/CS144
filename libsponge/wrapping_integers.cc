@@ -14,7 +14,7 @@ using namespace std;
 //! \param n The input absolute 64-bit sequence number
 //! \param isn The initial sequence number
 WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) {
-    uint32_t raw_value = n & 0xFFFFFFFF; // n % (2 ^ 32)
+    uint32_t raw_value = n & 0xFFFFFFFF;  // n % (2 ^ 32)
     return isn + raw_value;
 }
 
@@ -33,8 +33,9 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
 
     // (2 ^ 32) * x + val ~ checkpoint
     // cout << "val: " << val << " checkpoint: " << checkpoint << " val >= checkpoint: " << (val >= checkpoint) << "\n";
-    if (val >= checkpoint) return val;
-    
+    if (val >= checkpoint)
+        return val;
+
     int32_t x = static_cast<int32_t>((checkpoint - val) >> 32);
     uint64_t ans = val, minus = val >= checkpoint ? val - checkpoint : checkpoint - val;
     for (int32_t i = x - 1; i <= x + 1; i++) {
@@ -47,6 +48,6 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
         };
         // cout << "i: " << i << " pos_ans: " << pos_ans << "\n";
     };
-    
+
     return ans;
 }
