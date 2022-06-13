@@ -8,8 +8,56 @@
 
 #include <functional>
 #include <queue>
+#include <vector>
 
 //! \brief The "sender" part of a TCP implementation.
+
+class TCPTimer {
+  private:
+    bool _is_running;
+
+    size_t _ms_created;
+
+    //! retransmission timer for the connection currently
+    size_t _current_retransmission_timeout;
+
+  public:
+    TCPTimer() : _is_running{false}, _ms_created{0}, _current_retransmission_timeout{0} {};
+
+    bool is_running() {
+      return _is_running;
+    };
+
+    void start(size_t initial_retransmission_timeout) {
+      _is_running = true;
+      _ms_created = 0;
+      _current_retransmission_timeout = initial_retransmission_timeout;
+    };
+
+    void stop() {
+      _is_running = false;
+    };
+
+    void add(size_t ms_since_last_tick) {
+      _ms_created += ms_since_last_tick;
+    };
+
+    bool is_expired() {
+      return _is_running && (_ms_created > _current_retransmission_timeout);
+    };
+
+    void double_rto() {
+      _current_retransmission_timeout <<= 1;
+    };
+
+    void reset_rto(size_t initial_retransmission_timeout) {
+      _current_retransmission_timeout = initial_retransmission_timeout;
+    };
+
+    size_t get_rto() {
+      return _current_retransmission_timeout;
+    };
+};
 
 //! Accepts a ByteStream, divides it up into segments and sends the
 //! segments, keeps track of which segments are still in-flight,
@@ -23,6 +71,9 @@ class TCPSender {
     //! outbound queue of segments that the TCPSender wants sent
     std::queue<TCPSegment> _segments_out{};
 
+    //! outbound queue of segments that the TCPSerder wants to resend
+    std::vector<TCPSegment> _segments_outstanding{};
+
     //! retransmission timer for the connection
     unsigned int _initial_retransmission_timeout;
 
@@ -31,6 +82,21 @@ class TCPSender {
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
+    //! the retransmission timer
+    TCPTimer _retransmission_timer;
+
+    //! the number of consecutive retransmissions
+    unsigned int _count_consecutive_retransmissions{0};
+
+    //! the window size
+    unsigned int _window_size{1};
+
+    //! indicate whether the segments is syn, make it false after sending the first segments
+    bool is_syn{true};
+
+    //! remove any that have now been fully acknowledged outstanding segments
+    void _remove_acked_outstanding_segments();
 
   public:
     //! Initialize a TCPSender
