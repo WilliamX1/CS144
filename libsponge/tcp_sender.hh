@@ -22,7 +22,7 @@ class TCPTimer {
     size_t _current_retransmission_timeout;
 
   public:
-    TCPTimer() : _is_running{false}, _ms_created{0}, _current_retransmission_timeout{0} {};
+    TCPTimer(size_t initial_retransmission_timeout) : _is_running{false}, _ms_created{0}, _current_retransmission_timeout{initial_retransmission_timeout} {};
 
     bool is_running() {
       return _is_running;
@@ -34,6 +34,10 @@ class TCPTimer {
       _current_retransmission_timeout = initial_retransmission_timeout;
     };
 
+    void restart() {
+      _ms_created = 0;
+    };
+
     void stop() {
       _is_running = false;
     };
@@ -43,7 +47,7 @@ class TCPTimer {
     };
 
     bool is_expired() {
-      return _is_running && (_ms_created > _current_retransmission_timeout);
+      return _is_running && (_ms_created >= _current_retransmission_timeout);
     };
 
     void double_rto() {
@@ -83,6 +87,9 @@ class TCPSender {
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
 
+    //! the (absolute) sequence number for the ack byte
+    uint64_t _ackno{0};
+
     //! the retransmission timer
     TCPTimer _retransmission_timer;
 
@@ -92,12 +99,16 @@ class TCPSender {
     //! the window size
     unsigned int _window_size{1};
 
-    //! indicate whether the segments is syn, make it false after sending the first segments
-    bool is_syn{true};
+    //! indicate whether already syn, make it true after sending the first segments
+    bool _syn_sent{false};
+
+    //
+    bool _fin_sent{false};
 
     //! remove any that have now been fully acknowledged outstanding segments
     void _remove_acked_outstanding_segments();
 
+    char _get_char_indexed_ackno();
   public:
     //! Initialize a TCPSender
     TCPSender(const size_t capacity = TCPConfig::DEFAULT_CAPACITY,
