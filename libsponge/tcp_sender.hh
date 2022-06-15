@@ -12,30 +12,33 @@
 
 //! \brief The "sender" part of a TCP implementation.
 
+//! TCP Retransmission Timer
 class TCPTimer {
   private:
+    //! whether the timer is running
     bool _is_running;
 
-    size_t _ms_created;
+    //! microseconds since the timer started, reset to zero when the timer starts or restarts
+    size_t _ms_since_started;
 
     //! retransmission timer for the connection currently
     size_t _current_retransmission_timeout;
 
   public:
-    TCPTimer(size_t initial_retransmission_timeout) : _is_running{false}, _ms_created{0}, _current_retransmission_timeout{initial_retransmission_timeout} {};
+    TCPTimer(size_t initial_retransmission_timeout) : _is_running{false}, _ms_since_started{0}, _current_retransmission_timeout{initial_retransmission_timeout} {};
 
-    bool is_running() {
+    bool is_running() const {
       return _is_running;
     };
 
     void start(size_t initial_retransmission_timeout) {
       _is_running = true;
-      _ms_created = 0;
+      _ms_since_started = 0;
       _current_retransmission_timeout = initial_retransmission_timeout;
     };
 
     void restart() {
-      _ms_created = 0;
+      _ms_since_started = 0;
     };
 
     void stop() {
@@ -43,11 +46,11 @@ class TCPTimer {
     };
 
     void add(size_t ms_since_last_tick) {
-      _ms_created += ms_since_last_tick;
+      _ms_since_started += ms_since_last_tick;
     };
 
-    bool is_expired() {
-      return _is_running && (_ms_created >= _current_retransmission_timeout);
+    bool is_expired() const {
+      return _is_running && (_ms_since_started >= _current_retransmission_timeout);
     };
 
     void double_rto() {
@@ -58,7 +61,7 @@ class TCPTimer {
       _current_retransmission_timeout = initial_retransmission_timeout;
     };
 
-    size_t get_rto() {
+    size_t get_rto() const {
       return _current_retransmission_timeout;
     };
 };
@@ -96,19 +99,21 @@ class TCPSender {
     //! the number of consecutive retransmissions
     unsigned int _count_consecutive_retransmissions{0};
 
-    //! the window size
+    //! the window size, init with 1
     unsigned int _window_size{1};
 
-    //! indicate whether already syn, make it true after sending the first segments
+    //! indicate whether already send SYN, make it true after sending the segment with SYN
     bool _syn_sent{false};
 
-    //
+    //! indicate whether already send FIN, make it true after sending the segment with FIN
     bool _fin_sent{false};
 
     //! remove any that have now been fully acknowledged outstanding segments
     void _remove_acked_outstanding_segments();
 
-    char _get_char_indexed_ackno();
+    //! get the char indexed at the first byte of the segment which contains _ackno, used for fill_window when window_size is zero
+    char _get_char_indexed_ackno() const;
+
   public:
     //! Initialize a TCPSender
     TCPSender(const size_t capacity = TCPConfig::DEFAULT_CAPACITY,
