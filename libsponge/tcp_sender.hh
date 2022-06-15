@@ -8,8 +8,63 @@
 
 #include <functional>
 #include <queue>
+#include <vector>
 
 //! \brief The "sender" part of a TCP implementation.
+
+//! TCP Retransmission Timer
+class TCPTimer {
+  private:
+    //! whether the timer is running
+    bool _is_running;
+
+    //! microseconds since the timer started, reset to zero when the timer starts or restarts
+    size_t _ms_since_started;
+
+    //! retransmission timer for the connection currently
+    size_t _current_retransmission_timeout;
+
+  public:
+    TCPTimer(size_t initial_retransmission_timeout) : _is_running{false}, _ms_since_started{0}, _current_retransmission_timeout{initial_retransmission_timeout} {};
+
+    bool is_running() const {
+      return _is_running;
+    };
+
+    void start(size_t initial_retransmission_timeout) {
+      _is_running = true;
+      _ms_since_started = 0;
+      _current_retransmission_timeout = initial_retransmission_timeout;
+    };
+
+    void restart() {
+      _ms_since_started = 0;
+    };
+
+    void stop() {
+      _is_running = false;
+    };
+
+    void add(size_t ms_since_last_tick) {
+      _ms_since_started += ms_since_last_tick;
+    };
+
+    bool is_expired() const {
+      return _is_running && (_ms_since_started >= _current_retransmission_timeout);
+    };
+
+    void double_rto() {
+      _current_retransmission_timeout <<= 1;
+    };
+
+    void reset_rto(size_t initial_retransmission_timeout) {
+      _current_retransmission_timeout = initial_retransmission_timeout;
+    };
+
+    size_t get_rto() const {
+      return _current_retransmission_timeout;
+    };
+};
 
 //! Accepts a ByteStream, divides it up into segments and sends the
 //! segments, keeps track of which segments are still in-flight,
@@ -23,6 +78,9 @@ class TCPSender {
     //! outbound queue of segments that the TCPSender wants sent
     std::queue<TCPSegment> _segments_out{};
 
+    //! outbound queue of segments that the TCPSerder wants to resend
+    std::vector<TCPSegment> _segments_outstanding{};
+
     //! retransmission timer for the connection
     unsigned int _initial_retransmission_timeout;
 
@@ -31,6 +89,30 @@ class TCPSender {
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
+    //! the (absolute) sequence number for the ack byte
+    uint64_t _ackno{0};
+
+    //! the retransmission timer
+    TCPTimer _retransmission_timer;
+
+    //! the number of consecutive retransmissions
+    unsigned int _count_consecutive_retransmissions{0};
+
+    //! the window size, init with 1
+    unsigned int _window_size{1};
+
+    //! indicate whether already send SYN, make it true after sending the segment with SYN
+    bool _syn_sent{false};
+
+    //! indicate whether already send FIN, make it true after sending the segment with FIN
+    bool _fin_sent{false};
+
+    //! remove any that have now been fully acknowledged outstanding segments
+    void _remove_acked_outstanding_segments();
+
+    //! get the char indexed at the first byte of the segment which contains _ackno, used for fill_window when window_size is zero
+    char _get_char_indexed_ackno() const;
 
   public:
     //! Initialize a TCPSender
