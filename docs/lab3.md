@@ -1,65 +1,80 @@
-#include "tcp_sender.hh"
+# Lab Checkpoint 3: the TCP sender
 
-#include "tcp_config.hh"
+## Content
 
-#include <random>
+- [Retransmission Timer](#Retransmission-Timer)
+- [Implementing the TCP sender](#Implementing-the-TCP-sender)
 
-// Dummy implementation of a TCP sender
 
-// For Lab 3, please replace with a real implementation that passes the
-// automated checks run by `make check_lab3`.
+## Retransmission Timer
 
-template <typename... Targs>
-void DUMMY_CODE(Targs &&... /* unused */) {}
+Retransmission timer is an alarm that can be started at a certain time, and goes off (or "expires") once the RTO has elapsed. So I implement it as `TCPTimer` class and provide counting time functions such as `start()` or `is_expired()`.
 
-using namespace std;
+```C++
+//! TCP Retransmission Timer
+class TCPTimer {
+  private:
+    //! whether the timer is running
+    bool _is_running;
 
-//! \param[in] capacity the capacity of the outgoing byte stream
-//! \param[in] retx_timeout the initial amount of time to wait before retransmitting the oldest outstanding segment
-//! \param[in] fixed_isn the Initial Sequence Number to use, if set (otherwise uses a random ISN)
-TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const std::optional<WrappingInt32> fixed_isn)
-    : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
-    , _initial_retransmission_timeout{retx_timeout}
-    , _stream(capacity)
-    , _retransmission_timer(retx_timeout) {}
+    //! microseconds since the timer started, reset to zero when the timer starts or restarts
+    size_t _ms_since_started;
 
-void TCPSender::_remove_acked_outstanding_segments() {
-    for (auto iter = _segments_outstanding.begin(); iter != _segments_outstanding.end(); ) {
-        TCPSegment tcp_segment = *iter;
-        // if the `ackno` is greater than all of the sequence numbers in the segment, discard the piece from outstanding segments
-        if (_ackno >= unwrap(tcp_segment.header().seqno + tcp_segment.length_in_sequence_space(), _isn, _next_seqno)) {
-            iter = _segments_outstanding.erase(iter);
-        } else iter++;
+    //! retransmission timer for the connection currently
+    size_t _current_retransmission_timeout;
+
+  public:
+    TCPTimer(size_t initial_retransmission_timeout) : _is_running{false}, _ms_since_started{0}, _current_retransmission_timeout{initial_retransmission_timeout} {};
+
+    bool is_running() const {
+      return _is_running;
     };
-}
 
-char TCPSender::_get_char_indexed_ackno() const {
-    for (auto iter = _segments_outstanding.begin(); iter != _segments_outstanding.end(); ) {
-        TCPSegment tcp_segment = *iter;
-        uint64_t start_seqno = unwrap(tcp_segment.header().seqno, _isn, _next_seqno);
-        uint64_t end_seqno = start_seqno + tcp_segment.length_in_sequence_space();
-        if (start_seqno <= _ackno && _ackno < end_seqno)
-            return tcp_segment.payload().at(0);
+    void start(size_t initial_retransmission_timeout) {
+      _is_running = true;
+      _ms_since_started = 0;
+      _current_retransmission_timeout = initial_retransmission_timeout;
     };
-    cerr << "something is missing out in outstanding segments" << endl;
-    return {};
-}
 
-uint64_t TCPSender::bytes_in_flight() const {
-    uint64_t ans = 0;
-    for (const TCPSegment& tcp_segment : _segments_outstanding) {
-        uint64_t start_seqno = unwrap(tcp_segment.header().seqno, _isn, _next_seqno);
-        uint64_t end_seqno = start_seqno + tcp_segment.length_in_sequence_space();
-        if (_ackno < start_seqno)
-            ans += end_seqno - start_seqno;
-        else if (_ackno < end_seqno) 
-            ans += end_seqno - _ackno;
-        else
-            cerr << "Warning: redundent outstanding segments detected..." << endl;
+    void restart() {
+      _ms_since_started = 0;
     };
-    return ans;
-}
 
+    void stop() {
+      _is_running = false;
+    };
+
+    void add(size_t ms_since_last_tick) {
+      _ms_since_started += ms_since_last_tick;
+    };
+
+    bool is_expired() const {
+      return _is_running && (_ms_since_started >= _current_retransmission_timeout);
+    };
+
+    void double_rto() {
+      _current_retransmission_timeout <<= 1;
+    };
+
+    void reset_rto(size_t initial_retransmission_timeout) {
+      _current_retransmission_timeout = initial_retransmission_timeout;
+    };
+
+    size_t get_rto() const {
+      return _current_retransmission_timeout;
+    };
+};
+```
+
+## Implement the TCP sender
+
+`fill_window()` reads from its input `ByteStream` and sends as many bytes as possible in the form of `TCPSegments`, _as long as there are new bytes to be read and space acailable in the window_.
+
+Be careful that the `fill_window()` method should act like the window size is **one** if the window size is zero.
+
+Don't be too nervous in the first implementation. There are many specific tests to help you improve the details so you can just implement it, test it and improve it in a loop.
+
+```C++
 void TCPSender::fill_window() {
     // if the window size is zero, act like the window size is one
     // send a single byte that gets rejected by the receiver
@@ -104,7 +119,11 @@ void TCPSender::fill_window() {
         } else break;
     };
 }
+```
 
+`ack_received()` is called when a segment is received from the receiver, conveying the new left (= `ackno`) and right (= `ackno + window size`) edges of the window. The TCPSender should look through its collection of outstanding segments and remove any that have now been fully acknowl- edged (the ackno is greater than all of the sequence numbers in the segment). The TCPSender should fill the window again if new space has opened up. Again, you don't need to consider too many details in the first implementation, because you can fix it through tests.
+
+```C++
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
@@ -131,7 +150,11 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _count_consecutive_retransmissions = 0;
     };
 }
+```
 
+`tick()` will be called if time has passed a certain number of milliseconds. This method will use class `TCPTimer` as the timer.
+
+```C++
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick) {
     // retransmit the earliest segment that hasn't been fully ack by the TCP receiver
@@ -161,11 +184,9 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
         _retransmission_timer.start(_retransmission_timer.get_rto());
     };
 }
+```
 
-unsigned int TCPSender::consecutive_retransmissions() const {
-    return _count_consecutive_retransmissions;
-}
+And some other functions are much more easy to complete, which are not being mentioned in the document.
 
-void TCPSender::send_empty_segment() {
-    _segments_out.push(TCPSegment());
-}
+![12](./README/12.png)
+
