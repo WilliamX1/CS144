@@ -1,7 +1,8 @@
 # CS144 Introduction to Computer Networking
 
-`next`: https://www.youtube.com/watch?v=qNSIIRxEhZI&list=PL6RdenZrxrw9inR-IJv-erlOKRHjymxMN&index=20
+`next`:
 
+https://www.youtube.com/watch?v=KSTAsURGm5g&list=PL6RdenZrxrw9inR-IJv-erlOKRHjymxMN&index=43
 
 分层结构，网络传输时从上至下依次调用，主机之间仅同层交流，同一主机内仅上下层交流。
 
@@ -29,5 +30,24 @@
 
 ![2](./README/2.png)
 
+### TCP Service Model
 
+![3](./README/3.png)
+
+### UDP Service Model
+
+![4](./README/4.png)
+
+### 3-Way Handshake
+
+1. Active opener sends first packet. (SYN with sequence number)
+2. Passive opener responds. (SYN with sequence number, ACKs active opener's SYN packet)
+3. Active opener responds. (ACKs passive opener's SYN packet)
+
+**Connection Teardown**
+
+- $A \rightarrow B$: FIN, seq $S_A$, ack $S_B$.
+- $B \rightarrow A$: ack $S_{A + 1}$.
+- $B \rightarrow A$: FIN, seq $S_B$, ack $S_{A + 1}$
+- $A \rightarrow B$: ack $S_{B + 1}$.
 
